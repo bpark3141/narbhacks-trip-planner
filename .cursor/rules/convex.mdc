@@ -1,0 +1,116 @@
+# Convex Development Rules for Trip Planning App
+
+## Project Overview
+This is a trip planning application built with:
+- **Frontend**: Next.js 15 with TypeScript
+- **Backend**: Convex (database, server functions, real-time)
+- **Authentication**: Clerk
+- **Mobile**: React Native with Expo
+- **Monorepo**: Turborepo structure
+
+## Convex Schema Structure
+The app uses these main tables:
+- `users` - User accounts (linked to Clerk)
+- `trips` - Trip information (name, dates, owner, collaborators)
+- `destinations` - Trip destinations with arrival/departure dates
+- `itinerary_items` - Daily activities and schedules
+- `expenses` - Trip expenses and cost tracking
+- `notes` - Trip-specific notes (tripId is optional for standalone notes)
+- `reminders` - Trip reminders and notifications
+
+## Key Convex Functions
+- **trips.ts**: Trip CRUD operations, user management
+- **destinations.ts**: Destination management
+- **itinerary.ts**: Itinerary item management
+- **expenses.ts**: Expense tracking with user splitting
+- **notes.ts**: Note creation and management
+- **openai.ts**: AI itinerary generation (template-based)
+- **reminders.ts**: Reminder management
+
+## Development Guidelines
+
+### 1. User Management
+- Always use `getOrCreateUser` mutation to handle Clerk → Convex user mapping
+- Use Convex user IDs (`Id<"users">`) in all database operations
+- Never use Clerk user IDs directly in database fields
+
+### 2. Type Safety
+- Use generated types from `_generated/dataModel`
+- Ensure all mutations validate required fields
+- Use proper Convex ID types (`Id<"table_name">`)
+
+### 3. Query Patterns
+- Use `listByTrip` pattern for trip-specific data
+- Filter by `tripId` for all related data
+- Use proper Convex query filters with `q.eq()`, `q.and()`, etc.
+
+### 4. Error Handling
+- Always check for user authentication in mutations
+- Handle missing data gracefully
+- Use try-catch blocks for external API calls
+
+### 5. Real-time Features
+- Leverage Convex's automatic real-time updates
+- Use `useQuery` for reactive data
+- Use `useMutation` for data modifications
+
+## Common Patterns
+
+### Creating Trip-Related Data
+```typescript
+// Always get Convex user ID first
+const convexUserId = await getConvexUserId(ctx, clerkUserId);
+// Then use it in database operations
+await ctx.db.insert("table_name", {
+  tripId: args.tripId,
+  createdBy: convexUserId,
+  // ... other fields
+});
+```
+
+### Querying Trip Data
+```typescript
+const items = await ctx.db
+  .query("table_name")
+  .filter((q) => q.eq(q.field("tripId"), args.tripId))
+  .collect();
+```
+
+### Handling Optional Fields
+```typescript
+// In schema
+fieldName: v.optional(v.string())
+
+// In mutation
+fieldName: args.fieldName || undefined
+```
+
+## AI Integration
+- The app uses template-based itinerary generation (not OpenAI)
+- AI functions are in `openai.ts` but use Hugging Face or templates
+- Always handle AI API failures gracefully
+
+## Security Considerations
+- Validate user permissions for trip access
+- Check ownership/collaboration before modifications
+- Use Convex's built-in authentication helpers
+
+## Performance Tips
+- Use indexes for frequently queried fields
+- Limit query results with `.take()`
+- Use pagination for large datasets
+
+## Testing
+- Test all CRUD operations
+- Verify user permission checks
+- Test real-time updates
+- Validate type safety
+
+## Deployment
+- Ensure environment variables are set in Convex dashboard
+- Test all functions in development before deployment
+- Monitor function performance and errors
+description:
+globs:
+alwaysApply: false
+---
