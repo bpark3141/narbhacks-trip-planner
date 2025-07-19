@@ -65,14 +65,6 @@ export default function Header() {
                         My Trips
                       </button>
                     </Link>
-                    <Link href="/notes">
-                      <button
-                        type="button"
-                        className="text-white text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-[22px] py-[11px] button"
-                      >
-                        See your Notes
-                      </button>
-                    </Link>
                     <UserNav
                       image={user?.imageUrl}
                       name={user?.fullName!}
@@ -129,12 +121,6 @@ export default function Header() {
                     className="text-white text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-5 py-1.5 button"
                   >
                     My Trips
-                  </Link>
-                  <Link
-                    href="/notes"
-                    className="text-white text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-5 py-1.5 button"
-                  >
-                    Notes
                   </Link>
                 </div>
               ) : (
