@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 import { useState } from "react";
@@ -16,10 +16,12 @@ import {
   Bell,
   Clock,
   Wand2,
-  X
+  X,
+  Trash2,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import AIItineraryModal from "@/components/trips/AIItineraryModal";
 
 type TabType = "overview" | "destinations" | "itinerary" | "expenses" | "notes" | "reminders";
@@ -35,6 +37,19 @@ export default function TripDetail() {
   const [isAddItineraryOpen, setIsAddItineraryOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
+  const [isDeleteTripOpen, setIsDeleteTripOpen] = useState(false);
+  
+  // AI state
+  const [tripType, setTripType] = useState<{ type: string; confidence: number; suggestions: string[] } | null>(null);
+  const [weatherSuggestions, setWeatherSuggestions] = useState<string[]>([]);
+  const [tripSummary, setTripSummary] = useState<string>("");
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  
+  // AI Actions
+  const detectTripTypeAction = useAction(api.openai.detectTripType);
+  const getWeatherSuggestionsAction = useAction(api.openai.getWeatherSuggestions);
+  const generateTripSummaryAction = useAction(api.openai.generateTripSummary);
   
   const trip = useQuery(api.trips.get, { tripId: id as any });
   const destinations = useQuery(api.destinations.listByTrip, { tripId: id as any });
@@ -42,6 +57,53 @@ export default function TripDetail() {
   const expenses = useQuery(api.expenses.listByTrip, { tripId: id as any });
   const notes = useQuery(api.notes.listByTrip, { tripId: id as any });
   const reminders = useQuery(api.reminders.listByTrip, { tripId: id as any });
+
+  // AI Functions
+  const detectTripType = async () => {
+    if (!trip) return;
+    
+    setIsLoadingAI(true);
+    try {
+      const result = await detectTripTypeAction({ tripId: trip._id });
+      setTripType(result);
+    } catch (error) {
+      console.error('Error detecting trip type:', error);
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const getWeatherSuggestions = async () => {
+    if (!trip || !destinations || destinations.length === 0) return;
+    
+    setIsLoadingAI(true);
+    try {
+      const suggestions = await getWeatherSuggestionsAction({
+        location: destinations[0].location,
+        date: trip.startDate
+      });
+      setWeatherSuggestions(suggestions);
+    } catch (error) {
+      console.error('Error getting weather suggestions:', error);
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const generateTripSummary = async () => {
+    if (!trip) return;
+    
+    setIsLoadingAI(true);
+    try {
+      const summary = await generateTripSummaryAction({ tripId: trip._id });
+      setTripSummary(summary);
+      setShowAIModal(true);
+    } catch (error) {
+      console.error('Error generating trip summary:', error);
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -114,6 +176,14 @@ export default function TripDetail() {
                 <Plus className="w-4 h-4 mr-2" />
                 Add Item
               </Button>
+              <Button 
+                variant="outline" 
+                className="text-red-600 border-red-600 hover:bg-red-50"
+                onClick={() => setIsDeleteTripOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Trip
+              </Button>
             </div>
           </div>
         </div>
@@ -141,55 +211,169 @@ export default function TripDetail() {
           </nav>
         </div>
 
-        {/* Tab Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          {activeTab === "overview" && (
-            <TripOverview 
-              trip={trip}
-              destinations={destinations}
-              itinerary={itinerary}
-              expenses={expenses}
-              notes={notes}
-              reminders={reminders}
-            />
-          )}
-          
-          {activeTab === "destinations" && (
-            <DestinationsTab 
-              destinations={destinations} 
-              tripId={id as any}
-              onAddDestination={() => setIsAddDestinationOpen(true)}
-            />
-          )}
-          
-          {activeTab === "itinerary" && (
-            <ItineraryTab 
-              itinerary={itinerary} 
-              tripId={id as any} 
-              onOpenAIModal={() => setIsAIItineraryModalOpen(true)}
-              onAddItem={() => setIsAddItineraryOpen(true)}
-            />
-          )}
-          
-          {activeTab === "expenses" && (
-            <ExpensesTab 
-              expenses={expenses} 
-              tripId={id as any}
-              onAddExpense={() => setIsAddExpenseOpen(true)}
-            />
-          )}
-          
-          {activeTab === "notes" && (
-            <NotesTab 
-              notes={notes} 
-              tripId={id as any}
-              onAddNote={() => setIsAddNoteOpen(true)}
-            />
-          )}
-          
-          {activeTab === "reminders" && (
-            <RemindersTab reminders={reminders} tripId={id as any} />
-          )}
+        {/* Main Content and Sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              {activeTab === "overview" && (
+                <TripOverview 
+                  trip={trip}
+                  destinations={destinations}
+                  itinerary={itinerary}
+                  expenses={expenses}
+                  notes={notes}
+                  reminders={reminders}
+                />
+              )}
+              
+              {activeTab === "destinations" && (
+                <DestinationsTab 
+                  destinations={destinations} 
+                  tripId={id as any}
+                  onAddDestination={() => setIsAddDestinationOpen(true)}
+                />
+              )}
+              
+              {activeTab === "itinerary" && (
+                <ItineraryTab 
+                  itinerary={itinerary} 
+                  tripId={id as any} 
+                  onOpenAIModal={() => setIsAIItineraryModalOpen(true)}
+                  onAddItem={() => setIsAddItineraryOpen(true)}
+                />
+              )}
+              
+              {activeTab === "expenses" && (
+                <ExpensesTab 
+                  expenses={expenses} 
+                  tripId={id as any}
+                  onAddExpense={() => setIsAddExpenseOpen(true)}
+                />
+              )}
+              
+              {activeTab === "notes" && (
+                <NotesTab 
+                  notes={notes} 
+                  tripId={id as any}
+                  onAddNote={() => setIsAddNoteOpen(true)}
+                />
+              )}
+              
+              {activeTab === "reminders" && (
+                <RemindersTab reminders={reminders} tripId={id as any} />
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* AI Insights Panel */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Sparkles className="w-5 h-5 mr-2 text-purple-600" />
+                  AI Insights
+                </h3>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Trip Type Detection */}
+                <div>
+                  <button
+                    onClick={detectTripType}
+                    disabled={isLoadingAI}
+                    className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900">Trip Type</h4>
+                        <p className="text-sm text-gray-500">Detect trip category and get suggestions</p>
+                      </div>
+                      {isLoadingAI ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                      )}
+                    </div>
+                  </button>
+                  
+                  {tripType && (
+                    <div className="mt-3 p-3 bg-purple-50 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-purple-900">{tripType.type}</span>
+                        <span className="text-sm text-purple-600">{tripType.confidence}% confidence</span>
+                      </div>
+                      <ul className="text-sm text-purple-800 space-y-1">
+                        {tripType.suggestions.slice(0, 3).map((suggestion, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-purple-500 mr-2">•</span>
+                            {suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Weather Suggestions */}
+                <div>
+                  <button
+                    onClick={getWeatherSuggestions}
+                    disabled={isLoadingAI || !destinations || destinations.length === 0}
+                    className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900">Weather Tips</h4>
+                        <p className="text-sm text-gray-500">Get weather-aware packing suggestions</p>
+                      </div>
+                      {isLoadingAI ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      ) : (
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                      )}
+                    </div>
+                  </button>
+                  
+                  {weatherSuggestions.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                      <h5 className="font-medium text-blue-900 mb-2">Weather Suggestions:</h5>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        {weatherSuggestions.map((suggestion, index) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-blue-500 mr-2">•</span>
+                            {suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Generate Summary */}
+                <div>
+                  <button
+                    onClick={generateTripSummary}
+                    disabled={isLoadingAI}
+                    className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900">Trip Summary</h4>
+                        <p className="text-sm text-gray-500">Generate comprehensive trip overview</p>
+                      </div>
+                      {isLoadingAI ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                      ) : (
+                        <FileText className="w-4 h-4 text-green-600" />
+                      )}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -227,6 +411,44 @@ export default function TripDetail() {
         onClose={() => setIsAddNoteOpen(false)}
         tripId={id as string}
       />
+
+      {/* Delete Trip Confirmation Modal */}
+      <DeleteTripModal
+        isOpen={isDeleteTripOpen}
+        onClose={() => setIsDeleteTripOpen(false)}
+        tripId={id as string}
+        tripName={trip.name}
+      />
+
+      {/* AI Summary Modal */}
+      {showAIModal && tripSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Trip Summary</h3>
+              <button
+                onClick={() => setShowAIModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="prose prose-sm max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700">{tripSummary}</pre>
+              </div>
+            </div>
+            <div className="flex justify-end p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowAIModal(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -958,6 +1180,87 @@ function AddNoteModal({ isOpen, onClose, tripId }: { isOpen: boolean; onClose: (
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Delete Trip Confirmation Modal
+function DeleteTripModal({ isOpen, onClose, tripId, tripName }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  tripId: string; 
+  tripName: string; 
+}) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
+  
+  const deleteTrip = useMutation(api.trips.remove);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteTrip({ tripId: tripId as any });
+      // Redirect to trips list after successful deletion
+      router.push('/trips');
+    } catch (error) {
+      console.error("Error deleting trip:", error);
+      // You could add a toast notification here
+    } finally {
+      setIsDeleting(false);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-red-600">Delete Trip</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="mb-6">
+          <p className="text-gray-700 mb-4">
+            Are you sure you want to delete <strong>"{tripName}"</strong>?
+          </p>
+          <p className="text-sm text-gray-500">
+            This action cannot be undone. All trip data including destinations, itinerary items, expenses, notes, and reminders will be permanently deleted.
+          </p>
+        </div>
+        
+        <div className="flex justify-end space-x-3">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={onClose}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="button" 
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            {isDeleting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Trip
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
