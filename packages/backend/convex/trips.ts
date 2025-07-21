@@ -10,6 +10,7 @@ export const create = mutation({
     endDate: v.string(),
     description: v.optional(v.string()),
     ownerId: v.id("users"), // Convex user ID
+    keywords: v.optional(v.string()), // Add this line
   },
   handler: async (ctx, args) => {
     const tripId = await ctx.db.insert("trips", {
@@ -20,6 +21,7 @@ export const create = mutation({
       endDate: args.endDate,
       description: args.description,
       createdAt: new Date().toISOString(),
+      keywords: args.keywords, // Add this line
     });
     return tripId;
   },

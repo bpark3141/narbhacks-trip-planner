@@ -10,6 +10,7 @@ export const create = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     location: v.optional(v.string()),
+    order: v.optional(v.number()), // Add this line
   },
   handler: async (ctx, args) => {
     const itemId = await ctx.db.insert("itinerary_items", {
@@ -19,6 +20,7 @@ export const create = mutation({
       title: args.title,
       description: args.description,
       location: args.location,
+      order: args.order, // Add this line
     });
     return itemId;
   },
@@ -80,6 +82,7 @@ export const update = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     location: v.optional(v.string()),
+    order: v.optional(v.number()), // Add this line
   },
   handler: async (ctx, args) => {
     const { itemId, ...updates } = args;

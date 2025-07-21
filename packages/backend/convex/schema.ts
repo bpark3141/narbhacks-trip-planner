@@ -16,6 +16,7 @@ export default defineSchema({
     endDate: v.string(),   // ISO date
     description: v.optional(v.string()),
     createdAt: v.string(), // ISO date
+    keywords: v.optional(v.string()), // Add this line for special interests/keywords
   }),
   destinations: defineTable({
     tripId: v.id("trips"),
@@ -32,6 +33,7 @@ export default defineSchema({
     title: v.string(),
     description: v.optional(v.string()),
     location: v.optional(v.string()),
+    order: v.optional(v.number()), // Add this line for drag-and-drop ordering
   }),
   expenses: defineTable({
     tripId: v.id("trips"),

@@ -20,6 +20,7 @@
   ],
   "packageManager": "pnpm@9.15.1",
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "convex": "^1.25.2"
   }
 }

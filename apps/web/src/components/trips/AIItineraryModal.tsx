@@ -18,6 +18,7 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
   const [isGenerating, setIsGenerating] = useState(false);
   const [itinerary, setItinerary] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Reset itinerary when modal opens
   React.useEffect(() => {
@@ -68,47 +69,28 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
 
   const addToItinerary = async () => {
     setIsSaving(true);
+    setSaveSuccess(false);
     try {
-      // Parse the markdown and create individual itinerary items
+      // Parse the rule-based AI output: lines like 'Day 1: ...'
       const lines = itinerary.split('\n');
-      let currentDay = "";
-      let currentActivities: string[] = [];
-      
       for (const line of lines) {
-        if (line.startsWith('### Day')) {
-          // Save previous day's activities
-          if (currentDay && currentActivities.length > 0) {
-            await createItineraryItem({
-              tripId: tripId as any,
-              title: currentDay,
-              description: currentActivities.join('\n'),
-              date: new Date().toISOString().split('T')[0], // Default to today
-              time: "",
-              location: "",
-            });
-          }
-          currentDay = line.replace('### ', '').trim();
-          currentActivities = [];
-        } else if (line.startsWith('- ') && currentDay) {
-          currentActivities.push(line.replace('- ', ''));
+        const match = line.match(/^Day (\d+): (.+)$/);
+        if (match) {
+          const dayNum = match[1];
+          const activity = match[2];
+          await createItineraryItem({
+            tripId: tripId as any,
+            title: `Day ${dayNum}`,
+            description: activity,
+            date: "", // Optionally parse/assign a date
+            time: "",
+            location: "",
+          });
         }
       }
-      
-      // Save the last day's activities
-      if (currentDay && currentActivities.length > 0) {
-        await createItineraryItem({
-          tripId: tripId as any,
-          title: currentDay,
-          description: currentActivities.join('\n'),
-          date: new Date().toISOString().split('T')[0],
-          time: "",
-          location: "",
-        });
-      }
-      
-      onClose();
+      setSaveSuccess(true);
     } catch (error) {
-      console.error("Error adding to itinerary:", error);
+      console.error("Error saving itinerary:", error);
     } finally {
       setIsSaving(false);
     }
@@ -193,30 +175,12 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
                           {itinerary}
                         </ReactMarkdown>
                       </div>
-                      
                       <div className="flex justify-end space-x-3">
                         <Button
                           variant="outline"
                           onClick={onClose}
                         >
                           Close
-                        </Button>
-                        <Button
-                          onClick={saveAsNote}
-                          disabled={isSaving}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          {isSaving ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="w-4 h-4 mr-2" />
-                              Save as Note
-                            </>
-                          )}
                         </Button>
                         <Button
                           onClick={addToItinerary}
@@ -235,6 +199,9 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
                             </>
                           )}
                         </Button>
+                        {saveSuccess && (
+                          <span className="text-green-700 font-semibold self-center">Saved!</span>
+                        )}
                       </div>
                     </div>
                   )}

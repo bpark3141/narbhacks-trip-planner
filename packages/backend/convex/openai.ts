@@ -379,3 +379,404 @@ export const suggestItinerary = action({
     return itinerary;
   },
 });
+
+export const categorizeExpense = action({
+  args: {
+    description: v.string(),
+    amount: v.number(),
+  },
+  handler: async (
+    ctx: any,
+    { description, amount }: { description: string; amount: number }
+  ): Promise<string> => {
+    // Token-efficient categorization using keyword matching
+    const desc = description.toLowerCase();
+    
+    // Food & Dining
+    if (desc.includes('restaurant') || desc.includes('cafe') || desc.includes('food') || 
+        desc.includes('meal') || desc.includes('dinner') || desc.includes('lunch') || 
+        desc.includes('breakfast') || desc.includes('pizza') || desc.includes('burger') ||
+        desc.includes('coffee') || desc.includes('bar') || desc.includes('pub')) {
+      return 'Food & Dining';
+    }
+    
+    // Transportation
+    if (desc.includes('taxi') || desc.includes('uber') || desc.includes('lyft') || 
+        desc.includes('bus') || desc.includes('train') || desc.includes('metro') || 
+        desc.includes('subway') || desc.includes('airport') || desc.includes('flight') ||
+        desc.includes('car') || desc.includes('gas') || desc.includes('fuel') ||
+        desc.includes('parking') || desc.includes('rental')) {
+      return 'Transportation';
+    }
+    
+    // Accommodation
+    if (desc.includes('hotel') || desc.includes('hostel') || desc.includes('bnb') || 
+        desc.includes('airbnb') || desc.includes('resort') || desc.includes('lodge') ||
+        desc.includes('room') || desc.includes('accommodation') || desc.includes('stay')) {
+      return 'Accommodation';
+    }
+    
+    // Activities & Entertainment
+    if (desc.includes('museum') || desc.includes('tour') || desc.includes('ticket') || 
+        desc.includes('show') || desc.includes('concert') || desc.includes('movie') ||
+        desc.includes('activity') || desc.includes('adventure') || desc.includes('sport') ||
+        desc.includes('gym') || desc.includes('spa') || desc.includes('massage')) {
+      return 'Activities & Entertainment';
+    }
+    
+    // Shopping
+    if (desc.includes('shop') || desc.includes('store') || desc.includes('mall') || 
+        desc.includes('market') || desc.includes('souvenir') || desc.includes('gift') ||
+        desc.includes('clothing') || desc.includes('shoes') || desc.includes('bag')) {
+      return 'Shopping';
+    }
+    
+    // Health & Medical
+    if (desc.includes('pharmacy') || desc.includes('medicine') || desc.includes('doctor') ||
+        desc.includes('hospital') || desc.includes('medical') || desc.includes('health')) {
+      return 'Health & Medical';
+    }
+    
+    // Default category
+    return 'Other';
+  },
+});
+
+export const detectTripType = action({
+  args: {
+    tripId: v.id("trips"),
+  },
+  handler: async (
+    ctx: any,
+    { tripId }: { tripId: Id<"trips"> }
+  ): Promise<{ type: string; confidence: number; suggestions: string[] }> => {
+    // Fetch trip details
+    const trip: Doc<"trips"> | null = await ctx.runQuery((internal as any).trips.get, { tripId });
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+    
+    // Fetch destinations
+    const destinations: Doc<"destinations">[] = await ctx.runQuery((internal as any).destinations.listByTrip, { tripId });
+    
+    // Analyze trip characteristics
+    const name = trip.name.toLowerCase();
+    const description = (trip.description || '').toLowerCase();
+    const locations = destinations.map(d => d.location.toLowerCase()).join(' ');
+    const allText = `${name} ${description} ${locations}`;
+    
+    // Business trip indicators
+    const businessKeywords = ['business', 'meeting', 'conference', 'work', 'client', 'office', 'corporate'];
+    const businessScore = businessKeywords.filter(keyword => allText.includes(keyword)).length;
+    
+    // Adventure trip indicators
+    const adventureKeywords = ['hiking', 'climbing', 'adventure', 'trek', 'mountain', 'camping', 'outdoor', 'wilderness'];
+    const adventureScore = adventureKeywords.filter(keyword => allText.includes(keyword)).length;
+    
+    // Beach/Relaxation trip indicators
+    const beachKeywords = ['beach', 'island', 'coast', 'ocean', 'sea', 'resort', 'relax', 'vacation', 'tropical'];
+    const beachScore = beachKeywords.filter(keyword => allText.includes(keyword)).length;
+    
+    // Cultural trip indicators
+    const culturalKeywords = ['museum', 'temple', 'historic', 'cultural', 'heritage', 'ancient', 'traditional'];
+    const culturalScore = culturalKeywords.filter(keyword => allText.includes(keyword)).length;
+    
+    // Determine trip type
+    const scores = [
+      { type: 'Business', score: businessScore },
+      { type: 'Adventure', score: adventureScore },
+      { type: 'Beach/Relaxation', score: beachScore },
+      { type: 'Cultural', score: culturalScore }
+    ];
+    
+    scores.sort((a, b) => b.score - a.score);
+    const primaryType = scores[0];
+    const secondaryType = scores[1];
+    
+    // Calculate confidence
+    const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
+    const confidence = totalScore > 0 ? primaryType.score / totalScore : 0.25;
+    
+    // Generate suggestions based on trip type
+    const suggestions = getTripTypeSuggestions(primaryType.type, destinations);
+    
+    return {
+      type: primaryType.score > 0 ? primaryType.type : 'General',
+      confidence: Math.round(confidence * 100),
+      suggestions
+    };
+  },
+});
+
+function getTripTypeSuggestions(tripType: string, destinations: Doc<"destinations">[]): string[] {
+  const suggestions: { [key: string]: string[] } = {
+    'Business': [
+      'Pack professional attire',
+      'Bring business cards',
+      'Research local business customs',
+      'Book meeting rooms in advance',
+      'Plan networking opportunities'
+    ],
+    'Adventure': [
+      'Pack appropriate gear and clothing',
+      'Check weather conditions',
+      'Research local safety guidelines',
+      'Book guided tours for safety',
+      'Bring first aid supplies'
+    ],
+    'Beach/Relaxation': [
+      'Pack beach essentials (sunscreen, towel)',
+      'Book beachfront accommodations',
+      'Research water activities',
+      'Plan for sunset viewing',
+      'Pack light, comfortable clothing'
+    ],
+    'Cultural': [
+      'Research local customs and etiquette',
+      'Book guided cultural tours',
+      'Learn basic local phrases',
+      'Respect dress codes for religious sites',
+      'Plan visits to museums and historical sites'
+    ],
+    'General': [
+      'Check local weather forecast',
+      'Research local transportation',
+      'Learn about local customs',
+      'Plan for flexible itinerary',
+      'Pack according to activities'
+    ]
+  };
+  
+  return suggestions[tripType] || suggestions['General'];
+}
+
+export const generateTripSummary = action({
+  args: {
+    tripId: v.id("trips"),
+  },
+  handler: async (
+    ctx: any,
+    { tripId }: { tripId: Id<"trips"> }
+  ): Promise<string> => {
+    // Fetch trip data
+    const trip: Doc<"trips"> | null = await ctx.runQuery((internal as any).trips.get, { tripId });
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+    
+    const destinations: Doc<"destinations">[] = await ctx.runQuery((internal as any).destinations.listByTrip, { tripId });
+    const itinerary: Doc<"itinerary_items">[] = await ctx.runQuery((internal as any).itinerary.listByTrip, { tripId });
+    const expenses: Doc<"expenses">[] = await ctx.runQuery((internal as any).expenses.listByTrip, { tripId });
+    const notes: Doc<"notes">[] = await ctx.runQuery((internal as any).notes.listByTrip, { tripId });
+    
+    // Calculate trip duration
+    const startDate = new Date(trip.startDate);
+    const endDate = new Date(trip.endDate);
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Calculate total expenses
+    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    
+    // Generate summary
+    let summary = `# ${trip.name} - Trip Summary\n\n`;
+    
+    summary += `## Trip Overview\n`;
+    summary += `- **Duration:** ${daysDiff} days\n`;
+    summary += `- **Start Date:** ${trip.startDate}\n`;
+    summary += `- **End Date:** ${trip.endDate}\n`;
+    summary += `- **Total Expenses:** $${totalExpenses.toFixed(2)}\n\n`;
+    
+    if (trip.description) {
+      summary += `**Description:** ${trip.description}\n\n`;
+    }
+    
+    if (destinations.length > 0) {
+      summary += `## Destinations (${destinations.length})\n`;
+      destinations.forEach((dest, index) => {
+        summary += `${index + 1}. **${dest.name}** - ${dest.location}\n`;
+        summary += `   - Arrival: ${dest.arrivalDate}\n`;
+        summary += `   - Departure: ${dest.departureDate}\n`;
+      });
+      summary += `\n`;
+    }
+    
+    if (itinerary.length > 0) {
+      summary += `## Planned Activities (${itinerary.length})\n`;
+      const uniqueActivities = Array.from(new Set(itinerary.map(item => item.title)));
+      uniqueActivities.slice(0, 5).forEach(activity => {
+        summary += `- ${activity}\n`;
+      });
+      if (uniqueActivities.length > 5) {
+        summary += `- ... and ${uniqueActivities.length - 5} more activities\n`;
+      }
+      summary += `\n`;
+    }
+    
+    if (expenses.length > 0) {
+      summary += `## Expenses\n`;
+      summary += `- **Total Expenses:** $${totalExpenses.toFixed(2)}\n`;
+      summary += `- **Number of Expenses:** ${expenses.length}\n`;
+      summary += `- **Average per Expense:** $${(totalExpenses / expenses.length).toFixed(2)}\n\n`;
+    }
+    
+    if (notes.length > 0) {
+      summary += `## Notes & Reminders (${notes.length})\n`;
+      notes.slice(0, 3).forEach(note => {
+        summary += `- **${note.title}:** ${note.content.substring(0, 100)}${note.content.length > 100 ? '...' : ''}\n`;
+      });
+      if (notes.length > 3) {
+        summary += `- ... and ${notes.length - 3} more notes\n`;
+      }
+      summary += `\n`;
+    }
+    
+    summary += `## Key Highlights\n`;
+    summary += `- Trip spans ${daysDiff} days across ${destinations.length} destinations\n`;
+    summary += `- ${itinerary.length} planned activities and experiences\n`;
+    summary += `- Total budget of $${totalExpenses.toFixed(2)} for the trip\n`;
+    summary += `- ${notes.length} important notes and reminders captured\n\n`;
+    
+    summary += `*This summary was generated automatically based on your trip data.*`;
+    
+    return summary;
+  },
+});
+
+export const getWeatherSuggestions = action({
+  args: {
+    location: v.string(),
+    date: v.string(),
+  },
+  handler: async (
+    ctx: any,
+    { location, date }: { location: string; date: string }
+  ): Promise<string[]> => {
+    // Simple weather-based suggestions without API calls
+    // This is a token-efficient approach using location and date patterns
+    
+    const month = new Date(date).getMonth() + 1; // 1-12
+    const locationLower = location.toLowerCase();
+    
+    const suggestions: string[] = [];
+    
+    // Seasonal suggestions
+    if (month >= 12 || month <= 2) {
+      suggestions.push('Pack warm clothing and layers');
+      suggestions.push('Check for winter weather advisories');
+      suggestions.push('Consider indoor activity alternatives');
+    } else if (month >= 3 && month <= 5) {
+      suggestions.push('Pack light layers for spring weather');
+      suggestions.push('Bring rain gear for spring showers');
+      suggestions.push('Plan for blooming season activities');
+    } else if (month >= 6 && month <= 8) {
+      suggestions.push('Pack summer clothing and sun protection');
+      suggestions.push('Stay hydrated during outdoor activities');
+      suggestions.push('Plan for peak tourist season');
+    } else if (month >= 9 && month <= 11) {
+      suggestions.push('Pack comfortable layers for fall weather');
+      suggestions.push('Enjoy fall foliage and seasonal activities');
+      suggestions.push('Plan for cooler evenings');
+    }
+    
+    // Location-based suggestions
+    if (locationLower.includes('beach') || locationLower.includes('coast') || locationLower.includes('island')) {
+      suggestions.push('Check tide schedules for beach activities');
+      suggestions.push('Pack beach essentials and water protection');
+      suggestions.push('Research local marine weather conditions');
+    } else if (locationLower.includes('mountain') || locationLower.includes('alps')) {
+      suggestions.push('Check mountain weather and trail conditions');
+      suggestions.push('Pack appropriate hiking gear');
+      suggestions.push('Be prepared for altitude changes');
+    } else if (locationLower.includes('desert')) {
+      suggestions.push('Pack extra water and sun protection');
+      suggestions.push('Plan activities for cooler morning/evening hours');
+      suggestions.push('Check for extreme temperature warnings');
+    }
+    
+    // General weather tips
+    suggestions.push('Check local weather forecast before departure');
+    suggestions.push('Pack versatile clothing for changing conditions');
+    suggestions.push('Have backup plans for outdoor activities');
+    
+    return suggestions.slice(0, 5); // Limit to 5 suggestions
+  },
+});
+
+// Rule-based itinerary suggestion engine
+export const ruleBasedItinerary = action({
+  args: { tripId: v.id("trips") },
+  handler: async (ctx, { tripId }) => {
+    // Fetch trip and related data
+    const trip = await ctx.runQuery((internal as any).trips.get, { tripId });
+    if (!trip) throw new Error("Trip not found");
+    const destinations = await ctx.runQuery((internal as any).destinations.listByTrip, { tripId });
+    const startDate = new Date(trip.startDate);
+    const endDate = new Date(trip.endDate);
+    const days = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const month = startDate.getMonth() + 1;
+    const tripType = trip.type || "General";
+
+    // Example rules for destinations
+    const destinationRules: Record<string, string[]> = {
+      "Paris": [
+        "Visit the Eiffel Tower and stroll along the Seine.",
+        "Explore the Louvre and try French pastries in Le Marais.",
+        "Take a day trip to Versailles.",
+      ],
+      "Tokyo": [
+        "Explore Shibuya and visit Senso-ji Temple.",
+        "Try sushi at Tsukiji Market and see the Meiji Shrine.",
+        "Take a day trip to Mt. Fuji or Nikko.",
+      ],
+      "New York": [
+        "See Times Square and Central Park.",
+        "Visit the Metropolitan Museum of Art and walk the High Line.",
+        "Take a ferry to the Statue of Liberty.",
+      ],
+    };
+
+    // Example rules for seasons
+    const seasonRules: Record<string, string[]> = {
+      "summer": ["Enjoy outdoor cafes and festivals.", "Pack sunscreen and light clothing.", "Look for open-air concerts.",],
+      "winter": ["Visit indoor attractions and museums.", "Pack warm clothes and check for holiday events.", "Try local winter foods.",],
+      "spring": ["See local gardens and parks in bloom.", "Enjoy mild weather for walking tours.",],
+      "fall": ["Experience fall foliage in parks.", "Try seasonal foods and drinks.",],
+    };
+
+    // Example rules for trip types
+    const typeRules: Record<string, string[]> = {
+      "Adventure": ["Book a local hiking or biking tour.", "Try a water sport or outdoor activity."],
+      "Cultural": ["Visit museums and attend a local performance.", "Explore historic neighborhoods."],
+      "Relaxation": ["Schedule a spa day or beach afternoon.", "Enjoy slow meals at local restaurants."],
+      "General": ["Mix sightseeing with local food experiences.", "Leave time for spontaneous exploring."]
+    };
+
+    // Helper to get season
+    function getSeason(month: number) {
+      if ([12,1,2].includes(month)) return "winter";
+      if ([3,4,5].includes(month)) return "spring";
+      if ([6,7,8].includes(month)) return "summer";
+      return "fall";
+    }
+
+    // Build itinerary
+    let suggestions: string[] = [];
+    for (let i = 0; i < days; i++) {
+      const dest = destinations[i % destinations.length]?.name || destinations[0]?.name || "your destination";
+      // Destination-based
+      let daySuggestions = destinationRules[dest] || [
+        `Explore top sights in ${dest}.`,
+        "Try local cuisine and visit a museum.",
+        "Take a walking tour or visit a park.",
+      ];
+      // Season-based
+      const season = getSeason(month);
+      const seasonSuggestion = seasonRules[season][i % seasonRules[season].length];
+      // Type-based
+      const typeSuggestion = typeRules[tripType] ? typeRules[tripType][i % typeRules[tripType].length] : typeRules["General"][i % typeRules["General"].length];
+      // Compose
+      suggestions.push(`Day ${i+1}: ${daySuggestions[i % daySuggestions.length]} ${seasonSuggestion} ${typeSuggestion}`);
+    }
+    return suggestions;
+  }
+});

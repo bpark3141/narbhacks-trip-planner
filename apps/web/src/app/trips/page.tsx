@@ -147,6 +147,7 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
     startDate: "",
     endDate: "",
     description: "",
+    keywords: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -171,6 +172,7 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
         endDate: formData.endDate,
         description: formData.description,
         ownerId: convexUser._id,
+        keywords: formData.keywords,
       });
       onClose();
       onCreated(tripId); // Pass the new trip ID up
@@ -242,6 +244,19 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Special Interests or Keywords (optional)
+            </label>
+            <input
+              type="text"
+              value={formData.keywords}
+              onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., hiking, art, food, music"
+            />
+          </div>
+          
           <div className="flex justify-end space-x-3 pt-4">
             <Button
               type="button"
@@ -267,13 +282,22 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
 
 // Add the AI Suggest Itinerary Modal
 function AISuggestItineraryModal({ tripId, onClose }: { tripId: string; onClose: () => void }) {
+  const { user } = useUser();
   const [itinerary, setItinerary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const suggestItinerary = useAction(api.openai.suggestItinerary);
+  const createItineraryItem = useMutation(api.itinerary.create);
+  const createNote = useMutation(api.notes.create);
+  const trip = useQuery(api.trips.get, { tripId });
 
   const handleSuggest = async () => {
     setLoading(true);
     setItinerary(null);
+    setSaveSuccess(false);
+    setSaveError(null);
     try {
       const result = await suggestItinerary({ tripId });
       setItinerary(result);
@@ -281,6 +305,70 @@ function AISuggestItineraryModal({ tripId, onClose }: { tripId: string; onClose:
       setItinerary("Error generating itinerary.");
     }
     setLoading(false);
+  };
+
+  const addToItinerary = async () => {
+    if (!itinerary || !trip) return;
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+    let saved = 0;
+    const travelTips: string[] = [];
+    const tipKeywords = [
+      '**Packing:**',
+      '**Transportation:**',
+      '**Budget:**',
+      '**Safety:**',
+      '**Flexibility:**',
+    ];
+    try {
+      const lines = itinerary.split('\n');
+      const startDate = trip.startDate || new Date().toISOString().split('T')[0];
+      let currentDay = "Itinerary Item";
+      for (const line of lines) {
+        // Update current day if a day header is found
+        const dayMatch = line.match(/^###? Day (\d+):? (.+)?$/i);
+        if (dayMatch) {
+          currentDay = dayMatch[0].replace(/^#+ /, "").trim();
+          continue;
+        }
+        // Only save lines that start with '- '
+        if (line.trim().startsWith('- ')) {
+          // Check if this is a travel tip
+          const isTip = tipKeywords.some((kw) => line.includes(kw));
+          if (isTip) {
+            travelTips.push(line.replace(/^- /, '').trim());
+            continue;
+          }
+          // Otherwise, save as itinerary item
+          await createItineraryItem({
+            tripId,
+            title: currentDay,
+            description: line.trim().replace(/^- /, ''),
+            date: startDate,
+            time: "",
+            location: "",
+          });
+          saved++;
+        }
+      }
+      // Save travel tips as a note if any
+      if (travelTips.length > 0) {
+        await createNote({
+          tripId,
+          content: travelTips.join('\n'),
+          clerkUserId: user?.id,
+        });
+      }
+      if (saved > 0 || travelTips.length > 0) {
+        setSaveSuccess(true);
+      } else {
+        setSaveError("No valid itinerary items or travel tips found to save.");
+      }
+    } catch (err) {
+      setSaveError("Error saving itinerary items or travel tips.");
+    }
+    setIsSaving(false);
   };
 
   return (
@@ -295,9 +383,26 @@ function AISuggestItineraryModal({ tripId, onClose }: { tripId: string; onClose:
           {loading ? "Generating..." : "Suggest Full Itinerary with AI"}
         </button>
         {itinerary && (
-          <div className="mt-4 max-h-96 overflow-y-auto border p-2 rounded bg-gray-50">
-            <ReactMarkdown>{itinerary}</ReactMarkdown>
-          </div>
+          <>
+            <div className="mt-4 max-h-96 overflow-y-auto border p-2 rounded bg-gray-50">
+              <ReactMarkdown>{itinerary}</ReactMarkdown>
+            </div>
+            <div className="flex gap-4 mt-4">
+              <button
+                onClick={addToItinerary}
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+              >
+                {isSaving ? "Saving..." : "Add to Itinerary"}
+              </button>
+              {saveSuccess && (
+                <span className="text-green-700 font-semibold self-center">Saved!</span>
+              )}
+              {saveError && (
+                <span className="text-red-700 font-semibold self-center">{saveError}</span>
+              )}
+            </div>
+          </>
         )}
         <button
           onClick={onClose}

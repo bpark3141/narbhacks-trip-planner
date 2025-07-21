@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/common/button";
 import { 
   MapPin, 
@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AIItineraryModal from "@/components/trips/AIItineraryModal";
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 type TabType = "overview" | "destinations" | "itinerary" | "expenses" | "notes" | "reminders";
 
@@ -571,7 +572,47 @@ function DestinationsTab({ destinations, tripId, onAddDestination }: any) {
 }
 
 // Itinerary Tab Component
+function isError(err: unknown): err is Error {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'message' in err &&
+    typeof (err as { message?: unknown }).message === 'string'
+  );
+}
+
 function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
+  const [items, setItems] = useState(() =>
+    (itinerary || []).slice().sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+  );
+  const updateItineraryItem = useMutation(api.itinerary.update);
+
+  useEffect(() => {
+    setItems((itinerary || []).slice().sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)));
+  }, [itinerary]);
+
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    const reordered: any[] = Array.from(items);
+    const [removed] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, removed);
+    // Update local state
+    setItems(reordered);
+    // Persist new order to backend
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i].order !== i) {
+        try {
+          await updateItineraryItem({
+            itemId: reordered[i]._id,
+            order: i,
+          });
+        } catch (err) {
+          console.error((err as any)?.message || 'Unknown error updating itinerary item order');
+        }
+      }
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -590,47 +631,61 @@ function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
           </Button>
         </div>
       </div>
-      
-      <div className="space-y-4">
-        {itinerary?.map((item: any) => (
-          <div key={item._id} className="border border-gray-200 rounded-lg p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-semibold text-lg">{item.title}</h4>
-                <div className="flex items-center mt-1 text-sm text-gray-500">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  <span>{new Date(item.date).toLocaleDateString()}</span>
-                  {item.time && (
-                    <>
-                      <Clock className="w-4 h-4 ml-4 mr-2" />
-                      <span>{item.time}</span>
-                    </>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <Droppable droppableId="itinerary-list">
+          {(provided) => (
+            <div className="space-y-4" ref={provided.innerRef} {...provided.droppableProps}>
+              {items.map((item: any, index: number) => (
+                <Draggable key={item._id} draggableId={item._id} index={index}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      className={`border border-gray-200 rounded-lg p-4 bg-white ${snapshot.isDragging ? 'shadow-lg' : ''}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-lg">{item.title}</h4>
+                          <div className="flex items-center mt-1 text-sm text-gray-500">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            <span>{new Date(item.date).toLocaleDateString()}</span>
+                            {item.time && (
+                              <>
+                                <Clock className="w-4 h-4 ml-4 mr-2" />
+                                <span>{item.time}</span>
+                              </>
+                            )}
+                          </div>
+                          {item.location && (
+                            <div className="flex items-center mt-1 text-sm text-gray-500">
+                              <MapPin className="w-4 h-4 mr-2" />
+                              <span>{item.location}</span>
+                            </div>
+                          )}
+                          {item.description && (
+                            <p className="text-gray-600 mt-2 text-sm">{item.description}</p>
+                          )}
+                        </div>
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      </div>
+                    </div>
                   )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+              {(!items || items.length === 0) && (
+                <div className="text-center py-8 text-gray-500">
+                  <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>No itinerary items added yet</p>
                 </div>
-                {item.location && (
-                  <div className="flex items-center mt-1 text-sm text-gray-500">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    <span>{item.location}</span>
-                  </div>
-                )}
-                {item.description && (
-                  <p className="text-gray-600 mt-2 text-sm">{item.description}</p>
-                )}
-              </div>
-              <Button variant="outline" size="sm">
-                Edit
-              </Button>
+              )}
             </div>
-          </div>
-        ))}
-        
-        {(!itinerary || itinerary.length === 0) && (
-          <div className="text-center py-8 text-gray-500">
-            <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>No itinerary items added yet</p>
-          </div>
-        )}
-      </div>
+          )}
+        </Droppable>
+      </DragDropContext>
     </div>
   );
 }
