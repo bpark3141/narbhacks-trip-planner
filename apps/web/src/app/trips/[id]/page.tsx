@@ -586,6 +586,8 @@ function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
     (itinerary || []).slice().sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
   );
   const updateItineraryItem = useMutation(api.itinerary.update);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editFields, setEditFields] = useState<any>({});
 
   useEffect(() => {
     setItems((itinerary || []).slice().sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)));
@@ -596,9 +598,7 @@ function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
     const reordered: any[] = Array.from(items);
     const [removed] = reordered.splice(result.source.index, 1);
     reordered.splice(result.destination.index, 0, removed);
-    // Update local state
     setItems(reordered);
-    // Persist new order to backend
     for (let i = 0; i < reordered.length; i++) {
       if (reordered[i].order !== i) {
         try {
@@ -611,6 +611,37 @@ function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
         }
       }
     }
+  };
+
+  const handleEditClick = (item: any) => {
+    setEditingItem(item);
+    setEditFields({
+      title: item.title || '',
+      description: item.description || '',
+      date: item.date ? item.date.split('T')[0] : '',
+      time: item.time || '',
+      location: item.location || '',
+    });
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setEditFields({ ...editFields, [e.target.name]: e.target.value });
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    await updateItineraryItem({
+      itemId: editingItem._id,
+      ...editFields,
+    });
+    setEditingItem(null);
+    setEditFields({});
+  };
+
+  const handleEditCancel = () => {
+    setEditingItem(null);
+    setEditFields({});
   };
 
   return (
@@ -646,30 +677,81 @@ function ItineraryTab({ itinerary, tripId, onOpenAIModal, onAddItem }: any) {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="font-semibold text-lg">{item.title}</h4>
-                          <div className="flex items-center mt-1 text-sm text-gray-500">
-                            <Calendar className="w-4 h-4 mr-2" />
-                            <span>{new Date(item.date).toLocaleDateString()}</span>
-                            {item.time && (
-                              <>
-                                <Clock className="w-4 h-4 ml-4 mr-2" />
-                                <span>{item.time}</span>
-                              </>
-                            )}
-                          </div>
-                          {item.location && (
-                            <div className="flex items-center mt-1 text-sm text-gray-500">
-                              <MapPin className="w-4 h-4 mr-2" />
-                              <span>{item.location}</span>
-                            </div>
-                          )}
-                          {item.description && (
-                            <p className="text-gray-600 mt-2 text-sm">{item.description}</p>
+                          {editingItem?._id === item._id ? (
+                            <form onSubmit={handleEditSave} className="space-y-2">
+                              <input
+                                type="text"
+                                name="title"
+                                value={editFields.title}
+                                onChange={handleEditChange}
+                                className="w-full px-2 py-1 border rounded"
+                                placeholder="Title"
+                              />
+                              <textarea
+                                name="description"
+                                value={editFields.description}
+                                onChange={handleEditChange}
+                                className="w-full px-2 py-1 border rounded"
+                                placeholder="Description"
+                              />
+                              <input
+                                type="date"
+                                name="date"
+                                value={editFields.date}
+                                onChange={handleEditChange}
+                                className="w-full px-2 py-1 border rounded"
+                              />
+                              <input
+                                type="text"
+                                name="time"
+                                value={editFields.time}
+                                onChange={handleEditChange}
+                                className="w-full px-2 py-1 border rounded"
+                                placeholder="Time"
+                              />
+                              <input
+                                type="text"
+                                name="location"
+                                value={editFields.location}
+                                onChange={handleEditChange}
+                                className="w-full px-2 py-1 border rounded"
+                                placeholder="Location"
+                              />
+                              <div className="flex space-x-2 mt-2">
+                                <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white">Save</Button>
+                                <Button type="button" variant="outline" onClick={handleEditCancel}>Cancel</Button>
+                              </div>
+                            </form>
+                          ) : (
+                            <>
+                              <h4 className="font-semibold text-lg">{item.title}</h4>
+                              <div className="flex items-center mt-1 text-sm text-gray-500">
+                                <Calendar className="w-4 h-4 mr-2" />
+                                <span>{new Date(item.date).toLocaleDateString()}</span>
+                                {item.time && (
+                                  <>
+                                    <Clock className="w-4 h-4 ml-4 mr-2" />
+                                    <span>{item.time}</span>
+                                  </>
+                                )}
+                              </div>
+                              {item.location && (
+                                <div className="flex items-center mt-1 text-sm text-gray-500">
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <span>{item.location}</span>
+                                </div>
+                              )}
+                              {item.description && (
+                                <p className="text-gray-600 mt-2 text-sm">{item.description}</p>
+                              )}
+                            </>
                           )}
                         </div>
-                        <Button variant="outline" size="sm">
-                          Edit
-                        </Button>
+                        {editingItem?._id === item._id ? null : (
+                          <Button variant="outline" size="sm" onClick={() => handleEditClick(item)}>
+                            Edit
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}

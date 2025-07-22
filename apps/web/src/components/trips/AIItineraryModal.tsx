@@ -19,6 +19,7 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
   const [itinerary, setItinerary] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
 
   // Reset itinerary when modal opens
   React.useEffect(() => {
@@ -27,8 +28,9 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
     }
   }, [isOpen]);
   
-  const suggestItinerary = useAction(api.openai.suggestItinerary);
+  const suggestItinerary = useAction(api.openai.ruleBasedItinerary);
   const createItineraryItem = useMutation(api.itinerary.create);
+  const updateItineraryItem = useMutation(api.itinerary.update);
 
   const cancelButtonRef = useRef(null);
 
@@ -38,7 +40,8 @@ export default function AIItineraryModal({ isOpen, onClose, tripId }: AIItinerar
       console.log("Generating itinerary for tripId:", tripId);
       const result = await suggestItinerary({ tripId: tripId as any });
       console.log("Generated itinerary result:", result);
-      setItinerary(result);
+      setItinerary(Array.isArray(result) ? result.join('\n') : result);
+      console.log("AIItineraryModal itinerary:", Array.isArray(result) ? result.join('\n') : result);
     } catch (error) {
       console.error("Error generating itinerary:", error);
       setItinerary("Error generating itinerary. Please try again.");

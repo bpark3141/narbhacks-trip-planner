@@ -718,17 +718,17 @@ export const ruleBasedItinerary = action({
 
     // Example rules for destinations
     const destinationRules: Record<string, string[]> = {
-      "Paris": [
+      "paris": [
         "Visit the Eiffel Tower and stroll along the Seine.",
         "Explore the Louvre and try French pastries in Le Marais.",
         "Take a day trip to Versailles.",
       ],
-      "Tokyo": [
+      "tokyo": [
         "Explore Shibuya and visit Senso-ji Temple.",
         "Try sushi at Tsukiji Market and see the Meiji Shrine.",
         "Take a day trip to Mt. Fuji or Nikko.",
       ],
-      "New York": [
+      "new york": [
         "See Times Square and Central Park.",
         "Visit the Metropolitan Museum of Art and walk the High Line.",
         "Take a ferry to the Statue of Liberty.",
@@ -762,20 +762,27 @@ export const ruleBasedItinerary = action({
     // Build itinerary
     let suggestions: string[] = [];
     for (let i = 0; i < days; i++) {
-      const dest = destinations[i % destinations.length]?.name || destinations[0]?.name || "your destination";
-      // Destination-based
-      let daySuggestions = destinationRules[dest] || [
-        `Explore top sights in ${dest}.`,
-        "Try local cuisine and visit a museum.",
-        "Take a walking tour or visit a park.",
-      ];
-      // Season-based
-      const season = getSeason(month);
-      const seasonSuggestion = seasonRules[season][i % seasonRules[season].length];
-      // Type-based
-      const typeSuggestion = typeRules[tripType] ? typeRules[tripType][i % typeRules[tripType].length] : typeRules["General"][i % typeRules["General"].length];
-      // Compose
-      suggestions.push(`Day ${i+1}: ${daySuggestions[i % daySuggestions.length]} ${seasonSuggestion} ${typeSuggestion}`);
+      const dest = (destinations[i % destinations.length]?.name || destinations[0]?.name || "your destination").toLowerCase().trim();
+      console.log("Rule-based AI: destination for lookup:", dest);
+      // Substring match for destination rules
+      const ruleKey = Object.keys(destinationRules).find(key => dest.includes(key));
+      if (ruleKey) {
+        // Only use the hardcoded suggestion for this day, cycling if needed
+        const activity = destinationRules[ruleKey][i % destinationRules[ruleKey].length];
+        suggestions.push(`Day ${i+1}: ${activity}`);
+      } else {
+        let daySuggestions = [
+          `Explore top sights in ${dest}.`,
+          "Try local cuisine and visit a museum.",
+          "Take a walking tour or visit a park."
+        ];
+        // Season-based
+        const season = getSeason(month);
+        const seasonSuggestion = seasonRules[season][i % seasonRules[season].length];
+        // Type-based
+        const typeSuggestion = typeRules[tripType] ? typeRules[tripType][i % typeRules[tripType].length] : typeRules["General"][i % typeRules["General"].length];
+        suggestions.push(`Day ${i+1}: ${daySuggestions[i % daySuggestions.length]} ${seasonSuggestion} ${typeSuggestion}`);
+      }
     }
     return suggestions;
   }

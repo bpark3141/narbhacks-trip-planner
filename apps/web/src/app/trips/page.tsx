@@ -148,11 +148,13 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
     endDate: "",
     description: "",
     keywords: "",
+    destination: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createTrip = useMutation(api.trips.create);
   const getOrCreateUser = useMutation(api.trips.getOrCreateUser);
+  const createDestination = useMutation(api.destinations.create);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,6 +176,18 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
         ownerId: convexUser._id,
         keywords: formData.keywords,
       });
+      // Create initial destination if provided
+      if (formData.destination.trim()) {
+        const today = new Date().toISOString().split('T')[0];
+        await createDestination({
+          tripId,
+          name: formData.destination.trim(),
+          location: formData.destination.trim(),
+          arrivalDate: formData.startDate || today,
+          departureDate: formData.endDate || today,
+          notes: "",
+        });
+      }
       onClose();
       onCreated(tripId); // Pass the new trip ID up
     } catch (error) {
@@ -229,6 +243,19 @@ function CreateTripModal({ onClose, onCreated, userId, userName, userEmail }: { 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Destination (city or main location)
+            </label>
+            <input
+              type="text"
+              value={formData.destination}
+              onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., Tokyo, Paris, New York"
+            />
           </div>
           
           <div>

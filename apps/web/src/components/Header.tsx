@@ -75,12 +75,12 @@ export default function Header() {
                   <div className="hidden sm:flex absolute inset-y-0 right-0 gap-6 items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
                     <SignInButton>
                       <button className="border rounded-lg border-solid border-[#2D2D2D] text-[#2D2D2D] text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-[22px] py-2.5">
-                        Sign in
+                      Sign in
                       </button>
                     </SignInButton>
                     <SignInButton>
                       <button className="text-white text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-[22px] py-[11px] button">
-                        Get Started
+                      Get Started
                       </button>
                     </SignInButton>
                   </div>
@@ -115,14 +115,14 @@ export default function Header() {
                 </DisclosureButton>
               ))}
               {user ? (
-                <div className="flex gap-6 items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
-                  <Link
+              <div className="flex gap-6 items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
+                <Link
                     href="/trips"
                     className="text-white text-center text-xl not-italic font-normal leading-[normal] font-montserrat px-5 py-1.5 button"
-                  >
+                >
                     My Trips
-                  </Link>
-                </div>
+                </Link>
+              </div>
               ) : (
                 <div className="flex gap-6 items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
                   <SignInButton>
